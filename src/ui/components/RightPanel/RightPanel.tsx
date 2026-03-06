@@ -52,7 +52,7 @@ export const RightPanel: React.FC = () => {
 
   return (
     <div 
-      className={`absolute ${isDragging ? 'cursor-grabbing' : ''} transition-all duration-300 z-10`}
+      className={`absolute ${isDragging ? 'cursor-grabbing' : ''} transition-all duration-300 z-50`}
       style={{
         right: isCollapsed ? '-280px' : `${16 - position2.x}px`,
         top: `${16 + position2.y}px`,

@@ -49,12 +49,15 @@ function App() {
         <LeftPanel />
 
         {/* Center Map/Video View - Full Width */}
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 flex flex-col overflow-hidden z-10">
           <MapView />
         </div>
 
         {/* Right Telemetry Panel - Overlay */}
+        <div className='text z-100'>
         <RightPanel />
+        </div>
+
       </div>
 
       {/* Bottom Action Dock */}

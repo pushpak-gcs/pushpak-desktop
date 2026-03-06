@@ -1,6 +1,6 @@
 import React from 'react';
 import { useDroneStore } from '../../store/droneStore';
-import { Battery, Satellite, Signal, Radio, Settings } from 'lucide-react';
+import { Battery, Satellite, Signal, Radio, Settings, Plug, Unplug } from 'lucide-react';
 
 export const TopBar: React.FC = () => {
   const { droneStatus, connected } = useDroneStore();
@@ -115,19 +115,62 @@ export const TopBar: React.FC = () => {
         </div>
       </div>
 
-      {/* Connection Status */}
-      <div className={`px-3 py-1 rounded text-sm font-semibold ${
-        connected 
-          ? 'bg-green-500/20 text-green-400' 
-          : 'bg-red-500/20 text-red-400'
-      }`}>
-        {connected ? 'Connected' : 'Disconnected'}
-      </div>
-
       {/* Settings */}
       <button className="p-2 hover:bg-zinc-800 rounded transition-colors">
         <Settings size={20} className="text-gray-400 hover:text-white" />
       </button>
+
+      {/* Connection Controls */}
+      <div className="flex items-center gap-2 border-2 border-zinc-600 rounded-lg overflow-hidden bg-zinc-800/50">
+        <select 
+          className="bg-zinc-800 text-white border-0 px-3 py-2 text-sm font-semibold outline-none hover:bg-zinc-700 focus:bg-zinc-700 transition-colors min-w-[120px]"
+        >
+          <option value="">Select PORT</option>
+          <option value="COM1">COM1</option>
+          <option value="COM2">COM2</option>
+          <option value="COM3">COM3</option>
+          <option value="COM4">COM4</option>
+          <option value="/dev/ttyUSB0">/dev/ttyUSB0</option>
+          <option value="/dev/ttyUSB1">/dev/ttyUSB1</option>
+          <option value="/dev/ttyACM0">/dev/ttyACM0</option>
+          <option value="TCP">TCP</option>
+          <option value="UDP">UDP</option>
+        </select>
+        
+        <div className="h-8 w-px bg-zinc-600"></div>
+        
+        <select 
+          className="bg-zinc-800 text-white border-0 px-3 py-2 text-sm font-semibold outline-none hover:bg-zinc-700 focus:bg-zinc-700 transition-colors min-w-[100px]"
+        >
+          <option value="57600">57600</option>
+          <option value="115200">115200</option>
+          <option value="230400">230400</option>
+          <option value="460800">460800</option>
+          <option value="921600">921600</option>
+        </select>
+        
+        <div className="h-8 w-px bg-zinc-600"></div>
+        
+        <button 
+          className={`flex items-center gap-2 px-4 py-2 font-bold text-sm transition-all hover:opacity-90 ${
+            connected 
+              ? 'bg-red-600/50 text-white hover:bg-red-600' 
+              : 'bg-green-600/50 text-white hover:bg-green-600'
+          }`}
+        >
+          {connected ? (
+            <>
+              <Unplug size={16} />
+              <span>DISCONNECT</span>
+            </>
+          ) : (
+            <>
+              <Plug size={16} />
+              <span>CONNECT</span>
+            </>
+          )}
+        </button>
+      </div>
       </div>
 
     </div>
