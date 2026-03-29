@@ -11,12 +11,13 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "transpile:electron": "tsc --project src/electron/tsconfig.json",
+    "transpile:electron": "tsc --project src/electron/tsconfig.json && echo '{\"type\":\"commonjs\"}' > dist-electron/package.json",
     "dist:mac": "npm run transpile:electron && npm run build && electron-builder --mac --arm64",
     "dist:win": "npm run transpile:electron && npm run build && electron-builder --win --x64",
     "dist:linux": "npm run transpile:electron && npm run build && electron-builder --linux --x64"
   },
   "dependencies": {
+    "@pushpak/mavlink": "file:../pushpak-mavlink",
     "@tailwindcss/vite": "^4.1.18",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.563.0",

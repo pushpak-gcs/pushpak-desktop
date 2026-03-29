@@ -2,8 +2,15 @@
     "compilerOptions": {
         "strict": true,
         "target": "esnext",
-        "module": "nodenext",
+        "module": "commonjs",
         "outDir": "../../dist-electron",
-        "skipLibCheck": true
+        "skipLibCheck": true,
+        "esModuleInterop": true,
+        "moduleResolution": "node"
+    },
+    "ts-node": {
+        "compilerOptions": {
+            "module": "commonjs"
+        }
     }
 }

@@ -316,7 +316,6 @@ export const MapView: React.FC = () => {
         }
 
         setKmlData({ polygons, markers });
-        const total = polygons.length + markers.length;
         console.log('KML loaded successfully:', { polygons: polygons.length, markers: markers.length });
         alert(`KML loaded: ${polygons.length} polygon(s), ${markers.length} marker(s)`);
       } catch (error) {
