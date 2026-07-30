@@ -148,7 +148,7 @@ export const BottomDock: React.FC = () => {
         />
       </div>
 
-      {/* Altitude Dialog */}
+      {/* altitude Dialog */}
       {showAltitudeDialog && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-zinc-900 border-2 border-zinc-700 rounded-lg p-6 min-w-[400px]">

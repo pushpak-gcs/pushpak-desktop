@@ -1,27 +1,11 @@
-/**
- * React hooks for pushpak-desktop renderer process
- * 
- * Usage:
- * ```typescript
- * import { useVehicle, useTelemetry } from './hooks/mavlink';
- * 
- * function FlightControls() {
- *   const { connected, armed, mode, arm, setMode, takeoff } = useVehicle();
- *   const { attitude, position, battery } = useTelemetry();
- *   
- *   return (
- *     <button onClick={() => arm(true)} disabled={!connected}>
- *       ARM
- *     </button>
- *   );
- * }
- * ```
- */
-
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { io, Socket } from 'socket.io-client';
 
-// CopterMode constants - mirrors the enum in @pushpak/mavlink
-// We define it here to avoid importing Node.js dependencies in the browser
+
+export const socket: Socket = io('http://localhost:5000', {
+  autoConnect: true,
+});
+
 export const CopterMode = {
   STABILIZE: 0,
   ACRO: 1,
@@ -52,18 +36,6 @@ export const CopterMode = {
 
 export type CopterMode = typeof CopterMode[keyof typeof CopterMode];
 
-// Type definitions for Electron IPC (adjust based on your preload setup)
-declare global {
-  interface Window {
-    electron: {
-      invoke: (channel: string, ...args: any[]) => Promise<any>;
-      on: (channel: string, callback: (...args: any[]) => void) => void;
-      removeListener: (channel: string, callback: (...args: any[]) => void) => void;
-    };
-  }
-}
-
-// Vehicle state from manager
 export interface VehicleState {
   connected: boolean;
   armed: boolean;
@@ -75,7 +47,6 @@ export interface VehicleState {
   lastHeartbeat: number;
 }
 
-// Telemetry state from manager
 export interface TelemetryState {
   attitude?: {
     roll: number;
@@ -109,9 +80,7 @@ export interface TelemetryState {
   throttle: number;
 }
 
-/**
- * Hook for vehicle state and commands
- */
+
 export function useVehicle() {
   const [state, setState] = useState<VehicleState>({
     connected: false,
@@ -122,94 +91,125 @@ export function useVehicle() {
   });
 
   useEffect(() => {
-    // Check if electron API is available
-    if (typeof window === 'undefined' || !window.electron) {
-      console.error('window.electron is not available. Preload script may not be loaded.');
-      return;
-    }
-
     // Listen for state updates
     const handleStateUpdate = (newState: VehicleState) => {
       setState(newState);
     };
 
-    window.electron.on('mavlink:state', handleStateUpdate);
-
-    // Get initial state
-    window.electron.invoke('mavlink:getState').then((initialState) => {
-      setState(initialState);
-    }).catch(err => {
-      console.error('Failed to get initial MAVLink state:', err);
-    });
+    socket.on('mavlink:state', handleStateUpdate);
 
     return () => {
-      window.electron.removeListener('mavlink:state', handleStateUpdate);
+      socket.off('mavlink:state', handleStateUpdate);
     };
   }, []);
 
   // Command wrappers
   const arm = useCallback(async (armState: boolean) => {
-    if (typeof window === 'undefined' || !window.electron) {
-      throw new Error('Electron API not available');
-    }
     console.log(`[MAVLink] ${armState ? 'Arming' : 'Disarming'} vehicle...`);
-    const result = await window.electron.invoke('vehicle:arm', armState);
-    if (!result.success) {
-      console.error(`[MAVLink] ${armState ? 'Arm' : 'Disarm'} failed:`, result.error);
-      throw new Error(result.error);
-    }
-    console.log(`[MAVLink] Vehicle ${armState ? 'armed' : 'disarmed'} successfully`);
+    return new Promise<void>((resolve, reject) => {
+      socket.emit('vehicle_arm', { arm: armState }, (response: any) => {
+        if (response && response.success) {
+          console.log(`[MAVLink] Vehicle ${armState ? 'armed' : 'disarmed'} successfully`);
+          resolve();
+        } else {
+          console.error(`[MAVLink] ${armState ? 'Arm' : 'Disarm'} failed:`, response?.error);
+          reject(new Error(response?.error || 'Unknown error'));
+        }
+      });
+    });
   }, []);
 
   const setMode = useCallback(async (mode: CopterMode) => {
-    const result = await window.electron.invoke('vehicle:setMode', mode);
-    if (!result.success) {
-      throw new Error(result.error);
-    }
+    return new Promise<void>((resolve, reject) => {
+      socket.emit('vehicle_setMode', { mode }, (response: any) => {
+        if (response && response.success) resolve();
+        else reject(new Error(response?.error || 'Unknown error'));
+      });
+    });
   }, []);
 
   const takeoff = useCallback(async (altitude: number) => {
     console.log(`[mavlink.ts] Takeoff command invoked with altitude: ${altitude}m`);
-    const result = await window.electron.invoke('vehicle:takeoff', altitude);
-    console.log(`[mavlink.ts] Takeoff IPC result:`, result);
-    if (!result.success) {
-      throw new Error(result.error);
-    }
+    return new Promise<void>((resolve, reject) => {
+      socket.emit('vehicle_takeoff', { altitude }, (response: any) => {
+        console.log(`[mavlink.ts] Takeoff socket result:`, response);
+        if (response && response.success) resolve();
+        else reject(new Error(response?.error || 'Unknown error'));
+      });
+    });
   }, []);
 
   const land = useCallback(async () => {
-    const result = await window.electron.invoke('vehicle:land');
-    if (!result.success) {
-      throw new Error(result.error);
-    }
+    return new Promise<void>((resolve, reject) => {
+      socket.emit('vehicle_land', {}, (response: any) => {
+        if (response && response.success) resolve();
+        else reject(new Error(response?.error || 'Unknown error'));
+      });
+    });
   }, []);
 
   const returnToLaunch = useCallback(async () => {
-    const result = await window.electron.invoke('vehicle:rtl');
-    if (!result.success) {
-      throw new Error(result.error);
-    }
+    return new Promise<void>((resolve, reject) => {
+      socket.emit('vehicle_rtl', {}, (response: any) => {
+        if (response && response.success) resolve();
+        else reject(new Error(response?.error || 'Unknown error'));
+      });
+    });
   }, []);
 
   const goto = useCallback(async (lat: number, lon: number, altitude: number) => {
-    const result = await window.electron.invoke('vehicle:goto', lat, lon, altitude);
-    if (!result.success) {
-      throw new Error(result.error);
-    }
+    return new Promise<void>((resolve, reject) => {
+      socket.emit('vehicle_goto', { lat, lon, altitude }, (response: any) => {
+        if (response && response.success) resolve();
+        else reject(new Error(response?.error || 'Unknown error'));
+      });
+    });
   }, []);
 
-  const connect = useCallback(async (config: { type: 'udp' | 'serial', port?: number, host?: string, path?: string, baudRate?: number }) => {
-    const result = await window.electron.invoke('mavlink:connect', config);
-    if (!result.success) {
-      throw new Error(result.error);
+  const connect = useCallback(async (config: any) => {
+    let connection_string = 'udp:127.0.0.1:14550';
+    let baudrate = 115200;
+    
+    if (config.type === 'udp') {
+      connection_string = `udp:${config.host}:${config.port}`;
+    } else if (config.type === 'tcp') {
+      connection_string = `tcp:${config.host}:${config.port}`;
+    } else if (config.type === 'serial') {
+      connection_string = config.path;
+      baudrate = config.baudRate;
     }
+    
+    return new Promise<void>((resolve, reject) => {
+      socket.emit('vehicle_connect', { connection_string, baudrate }, (response: any) => {
+        if (response && response.success) resolve();
+        else reject(new Error(response?.error || 'Unknown error'));
+      });
+    });
   }, []);
 
   const disconnect = useCallback(async () => {
-    const result = await window.electron.invoke('mavlink:disconnect');
-    if (!result.success) {
-      throw new Error(result.error);
-    }
+    return new Promise<void>((resolve, reject) => {
+      socket.emit('vehicle_disconnect', {}, (response: any) => {
+        if (response && response.success) resolve();
+        else reject(new Error(response?.error || 'Unknown error'));
+      });
+    });
+  }, []);
+
+  const uploadMission = useCallback(async (waypoints: any[], endAction: 'LOITER' | 'RTL' | 'LAND' = 'LOITER') => {
+    return new Promise<void>((resolve, reject) => {
+      // Map waypoints to just lat, lon, alt for the backend
+      const mapped = waypoints.map(wp => ({
+        lat: wp.position.lat,
+        lon: wp.position.lng,
+        alt: wp.altitude || 10,
+        loiterTime: wp.loiterTime || 0
+      }));
+      socket.emit('vehicle_upload_mission', { waypoints: mapped, endAction }, (response: any) => {
+        if (response && response.success) resolve();
+        else reject(new Error(response?.error || 'Unknown error'));
+      });
+    });
   }, []);
 
   return {
@@ -221,13 +221,12 @@ export function useVehicle() {
     returnToLaunch,
     goto,
     connect,
-    disconnect
+    disconnect,
+    uploadMission
   };
 }
 
-/**
- * Hook for telemetry data
- */
+
 export function useTelemetry() {
   const [telemetry, setTelemetry] = useState<TelemetryState>({
     heading: 0,
@@ -240,12 +239,6 @@ export function useTelemetry() {
   const lastAltitudeRef = useRef<number>(0);
 
   useEffect(() => {
-    // Check if electron API is available
-    if (typeof window === 'undefined' || !window.electron) {
-      console.error('window.electron is not available. Preload script may not be loaded.');
-      return;
-    }
-
     const handleTelemetryUpdate = (newTelemetry: TelemetryState) => {
       // Only log when altitude changes by more than 0.5m (to detect takeoff)
       const currentAlt = newTelemetry.position?.relativeAlt ?? 0;
@@ -256,24 +249,16 @@ export function useTelemetry() {
       setTelemetry(newTelemetry);
     };
 
-    window.electron.on('mavlink:telemetry', handleTelemetryUpdate);
-
-    // Get initial telemetry
-    window.electron.invoke('mavlink:getTelemetry').then(setTelemetry).catch(err => {
-      console.error('Failed to get initial MAVLink telemetry:', err);
-    });
+    socket.on('mavlink:telemetry', handleTelemetryUpdate);
 
     return () => {
-      window.electron.removeListener('mavlink:telemetry', handleTelemetryUpdate);
+      socket.off('mavlink:telemetry', handleTelemetryUpdate);
     };
   }, []);
 
   return telemetry;
 }
 
-/**
- * Hook for vehicle connection events
- */
 export function useVehicleConnection() {
   const [vehicleId, setVehicleId] = useState<number | null>(null);
   const [isConnected, setIsConnected] = useState(false);
@@ -288,12 +273,21 @@ export function useVehicleConnection() {
       setIsConnected(false);
     };
 
-    window.electron.on('mavlink:vehicle-found', handleVehicleFound);
-    window.electron.on('mavlink:vehicle-lost', handleVehicleLost);
+    socket.on('mavlink:vehicle-found', handleVehicleFound);
+    socket.on('mavlink:vehicle-lost', handleVehicleLost);
+    socket.on('mavlink:disconnected', handleVehicleLost);
+    socket.on('connect', () => console.log('Socket.IO Connected to pushpak-core'));
+    socket.on('disconnect', () => {
+      console.log('Socket.IO Disconnected from pushpak-core');
+      setIsConnected(false);
+    });
 
     return () => {
-      window.electron.removeListener('mavlink:vehicle-found', handleVehicleFound);
-      window.electron.removeListener('mavlink:vehicle-lost', handleVehicleLost);
+      socket.off('mavlink:vehicle-found', handleVehicleFound);
+      socket.off('mavlink:vehicle-lost', handleVehicleLost);
+      socket.off('mavlink:disconnected', handleVehicleLost);
+      socket.off('connect');
+      socket.off('disconnect');
     };
   }, []);
 
