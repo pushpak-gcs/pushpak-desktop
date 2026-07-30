@@ -6,7 +6,7 @@ export const RightPanel: React.FC = () => {
   const telemetry = useTelemetry();
   const { connected } = useVehicle();
   
-  // Debug: log when telemetry updates
+  // TOTO: Debug: log when telemetry updates
   React.useEffect(() => {
     if (telemetry.position?.relativeAlt !== undefined) {
       console.log('[RightPanel] Rendering with altitude:', telemetry.position.relativeAlt.toFixed(2), 'm');
@@ -68,7 +68,6 @@ export const RightPanel: React.FC = () => {
       }}
       onMouseDown={handleMouseDown}
     >
-      {/* Collapse/Expand Button */}
       <button
         onClick={() => setIsCollapsed(!isCollapsed)}
         className="absolute -left-10 top-1/2 -translate-y-1/2 bg-gradient-to-b from-zinc-800 to-zinc-900 hover:from-zinc-700 hover:to-zinc-800 border-2 border-zinc-700 rounded-l-lg p-2 transition-all shadow-xl z-20"
@@ -86,16 +85,15 @@ export const RightPanel: React.FC = () => {
         </div>
 
         <div className="flex-1 p-4 space-y-4 overflow-y-auto scrollbar-thin">
-        {/* Attitude Indicator */}
+        {/* Attitude */}
         <TelemetryCard title="Attitude" icon={<Gauge size={18} />}>
           <div className="flex justify-center my-4">
             <div className="relative w-32 h-32">
               <svg viewBox="0 0 100 100" className="w-full h-full">
-                {/* Horizon */}
+
                 <circle cx="50" cy="50" r="45" fill="none" stroke="#374151" strokeWidth="2" />
                 <line x1="20" y1="50" x2="80" y2="50" stroke="#00ff88" strokeWidth="2" />
                 
-                {/* Pitch line */}
                 <line
                   x1="50"
                   y1="10"
@@ -106,7 +104,6 @@ export const RightPanel: React.FC = () => {
                   transform={`rotate(${telemetry.attitude ? (telemetry.attitude.roll * 180 / Math.PI) : 0} 50 50)`}
                 />
                 
-                {/* Center dot */}
                 <circle cx="50" cy="50" r="3" fill="#00ff88" />
               </svg>
               <div className="absolute inset-0 flex items-center justify-center">
@@ -135,7 +132,6 @@ export const RightPanel: React.FC = () => {
           </div>
         </TelemetryCard>
 
-        {/* Altitude */}
         <TelemetryCard title="Altitude" icon={<Navigation size={18} />}>
           <div className="text-center my-4">
             <div className="text-4xl font-bold text-primary-500">
@@ -176,7 +172,6 @@ export const RightPanel: React.FC = () => {
           </div>
         </TelemetryCard>
 
-        {/* Link Quality */}
         <TelemetryCard title="Link" icon={<Radio size={18} />}>
           <div className="space-y-3">
             <div>
@@ -210,7 +205,7 @@ export const RightPanel: React.FC = () => {
           </div>
         </TelemetryCard>
 
-        {/* GPS Position */}
+          {/* Gps Position Card */}
         <TelemetryCard title="GPS Position" icon={<Navigation size={18} />}>
           <div className="space-y-2 text-sm font-mono">
             <div className="flex justify-between">

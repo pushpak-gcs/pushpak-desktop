@@ -7,6 +7,7 @@ import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 import { useDroneStore } from '../../store/droneStore';
+import { useTelemetry, useVehicle } from '../../hooks/mavlink';
 import type { Position, Waypoint } from '../../types';
 
 L.Icon.Default.mergeOptions({
@@ -48,13 +49,13 @@ interface ContextMenuProps {
   position: { x: number; y: number };
   latlng: L.LatLng | null;
   onClose: () => void;
-  setIsDrawingPolygon: (value: boolean) => void;
-  setPolygonVertices: (vertices: L.LatLng[]) => void;
   onLoadKml: () => void;
   setKmlData: (data: { polygons: L.LatLng[][], markers: L.LatLng[] }) => void;
+  onAddWaypoint: (latlng: L.LatLng) => void;
+  onGoTo: (latlng: L.LatLng) => void;
 }
 
-const ContextMenu: React.FC<ContextMenuProps> = ({ position, latlng, onClose, setIsDrawingPolygon, setPolygonVertices, onLoadKml, setKmlData }) => {
+const ContextMenu: React.FC<ContextMenuProps> = ({ position, latlng, onClose, onLoadKml, setKmlData, onAddWaypoint, onGoTo }) => {
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -72,7 +73,8 @@ const ContextMenu: React.FC<ContextMenuProps> = ({ position, latlng, onClose, se
     {
       title: 'Waypoint',
       items: [
-        { icon: <Flag size={16} />, label: 'Add Waypoint', action: () => console.log('Add waypoint at', latlng) },
+        { icon: <Flag size={16} />, label: 'Add Waypoint', action: () => { if (latlng) onAddWaypoint(latlng); } },
+        { icon: <Navigation2 size={16} />, label: 'Go to Location', action: () => { if (latlng) onGoTo(latlng); } },
         { icon: <Trash2 size={16} />, label: 'Delete Waypoint', action: () => console.log('Delete waypoint') },
         { icon: <Navigation2 size={16} />, label: 'Set Home Position', action: () => console.log('Set home at', latlng) },
       ],
@@ -89,7 +91,6 @@ const ContextMenu: React.FC<ContextMenuProps> = ({ position, latlng, onClose, se
       title: 'Geofence',
       items: [
         { icon: <MapPin size={16} />, label: 'Add Geofence Vertex', action: () => console.log('Add geofence vertex at', latlng) },
-        { icon: <MapPin size={16} />, label: 'Draw Polygon', action: () => { onClose(); setIsDrawingPolygon(true); setPolygonVertices([]); } },
         { icon: <Trash2 size={16} />, label: 'Clear Geofence', action: () => console.log('Clear geofence') },
         { icon: <MapPin size={16} />, label: 'Load Geofence', action: () => console.log('Load geofence') },
         { icon: <MapPin size={16} />, label: 'Save Geofence', action: () => console.log('Save geofence') },
@@ -167,12 +168,10 @@ const FitKmlBounds: React.FC<{ kmlData: { polygons: L.LatLng[][], markers: L.Lat
 
     const allPoints: L.LatLng[] = [];
     
-    // Add all polygon vertices
     kmlData.polygons.forEach(polygon => {
       allPoints.push(...polygon);
     });
-    
-    // Add all markers
+
     allPoints.push(...kmlData.markers);
 
     if (allPoints.length > 0) {
@@ -184,14 +183,36 @@ const FitKmlBounds: React.FC<{ kmlData: { polygons: L.LatLng[][], markers: L.Lat
   return null;
 };
 
+const MapController: React.FC<{ 
+  dronePosition: L.LatLngExpression; 
+  isTracking: boolean;
+}> = ({ dronePosition, isTracking }) => {
+  const map = useMap();
+  
+  useEffect(() => {
+    if (isTracking && dronePosition) {
+      map.setView(dronePosition, map.getZoom(), { animate: true });
+    }
+  }, [dronePosition, isTracking, map]);
+
+  return null;
+};
+
 export const MapView: React.FC = () => {
-  const { droneStatus, currentMission, geofence, mapCenter } = useDroneStore();
+  const { droneStatus, currentMission, geofence, mapCenter, addWaypoint, isDrawingMode, addPolygonVertex } = useDroneStore();
+  const { connected, goto } = useVehicle();
+  const telemetry = useTelemetry();
 
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; latlng: L.LatLng } | null>(null);
-  const [isDrawingPolygon, setIsDrawingPolygon] = useState(false);
-  const [polygonVertices, setPolygonVertices] = useState<L.LatLng[]>([]);
   const [kmlData, setKmlData] = useState<{ polygons: L.LatLng[][], markers: L.LatLng[] }>({ polygons: [], markers: [] });
+  const [isTracking, setIsTracking] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (connected) {
+      setIsTracking(true);
+    }
+  }, [connected]);
 
   const waypoints: Waypoint[] = currentMission?.waypoints ?? [];
   const waypointPositions = useMemo(
@@ -208,40 +229,43 @@ export const MapView: React.FC = () => {
     [geofence]
   );
 
-  const dronePosition = isValidPosition(droneStatus.position)
-    ? toLatLng(droneStatus.position)
+  const dronePosition = (telemetry.position && isValidCoordinate(telemetry.position.lat, 90) && isValidCoordinate(telemetry.position.lon, 180))
+    ? ([telemetry.position.lat, telemetry.position.lon] as L.LatLngExpression)
     : ([mapCenter.lat, mapCenter.lng] as L.LatLngExpression);
 
   const homePosition = isValidPosition(currentMission?.homePosition)
     ? toLatLng(currentMission!.homePosition!)
     : null;
 
-  const droneIcon = createDroneIcon(droneStatus.attitude.yaw);
+  const droneIcon = createDroneIcon(telemetry.heading || 0);
 
   const handleMapClick = (e: L.LeafletMouseEvent) => {
-    if (isDrawingPolygon) {
-      setPolygonVertices([...polygonVertices, e.latlng]);
+    if (isDrawingMode) {
+      addPolygonVertex({ lat: e.latlng.lat, lng: e.latlng.lng });
     }
   };
 
+  const polygonVertices = useMemo(() => {
+    return currentMission?.polygon ? currentMission.polygon.map(toLatLng) : [];
+  }, [currentMission?.polygon]);
+
   const undoLastVertex = () => {
-    if (polygonVertices.length > 0) {
-      setPolygonVertices(polygonVertices.slice(0, -1));
+    if (currentMission?.polygon && currentMission.polygon.length > 0) {
+      useDroneStore.getState().updateMissionDetails({
+        polygon: currentMission.polygon.slice(0, -1)
+      });
     }
   };
 
   const completePolygon = () => {
     if (polygonVertices.length >= 3) {
-      console.log('Polygon completed with vertices:', polygonVertices);
-      // Here you can save the polygon to the store or state
-      setIsDrawingPolygon(false);
-      setPolygonVertices([]);
+      useDroneStore.getState().setIsDrawingMode(false);
     }
   };
 
   const cancelPolygonDrawing = () => {
-    setIsDrawingPolygon(false);
-    setPolygonVertices([]);
+    useDroneStore.getState().setIsDrawingMode(false);
+    useDroneStore.getState().clearPolygon();
   };
 
   const handleLoadKml = () => {
@@ -278,7 +302,6 @@ export const MapView: React.FC = () => {
           }
         }
 
-        // Parse LineStrings as polylines
         const lineElements = xmlDoc.getElementsByTagName('LineString');
         console.log('Found line elements:', lineElements.length);
         for (let i = 0; i < lineElements.length; i++) {
@@ -296,7 +319,6 @@ export const MapView: React.FC = () => {
           }
         }
 
-        // Parse Placemarks (points)
         const placemarks = xmlDoc.getElementsByTagName('Placemark');
         console.log('Found placemarks:', placemarks.length);
         for (let i = 0; i < placemarks.length; i++) {
@@ -338,12 +360,11 @@ export const MapView: React.FC = () => {
         alert('Please select a valid KML file');
       }
     }
-    // Reset input so the same file can be loaded again
     if (e.target) e.target.value = '';
   };
 
   const handleContextMenu = (e: L.LeafletMouseEvent) => {
-    if (!isDrawingPolygon) {
+    if (!isDrawingMode) {
       setContextMenu({
         x: e.originalEvent.clientX,
         y: e.originalEvent.clientY,
@@ -352,10 +373,9 @@ export const MapView: React.FC = () => {
     }
   };
 
-  // Handle keyboard shortcuts for polygon drawing
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
-      if (isDrawingPolygon) {
+      if (isDrawingMode) {
         if (e.key === 'Escape') {
           cancelPolygonDrawing();
         } else if (e.key === 'Backspace' || e.key === 'Delete') {
@@ -369,7 +389,7 @@ export const MapView: React.FC = () => {
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [isDrawingPolygon, polygonVertices]);
+  }, [isDrawingMode, polygonVertices]);
 
   return (
     <div className="relative w-full h-full bg-black">
@@ -389,8 +409,8 @@ export const MapView: React.FC = () => {
 
         <MapEventHandler onContextMenu={handleContextMenu} onMapClick={handleMapClick} />
         <FitKmlBounds kmlData={kmlData} />
+        <MapController dronePosition={dronePosition} isTracking={isTracking} />
 
-        {/* KML Data Display */}
         {kmlData.polygons.map((polygon, index) => (
           <Polygon
             key={`kml-polygon-${index}`}
@@ -411,25 +431,24 @@ export const MapView: React.FC = () => {
           </CircleMarker>
         ))}
 
-        {/* Drawing Polygon Preview */}
-        {isDrawingPolygon && polygonVertices.length > 0 && (
+        {isDrawingMode && polygonVertices.length > 0 && (
           <>
             {polygonVertices.length >= 3 && (
               <Polygon
-                positions={polygonVertices.map(v => [v.lat, v.lng])}
+                positions={polygonVertices as L.LatLngExpression[]}
                 pathOptions={{ color: '#3b82f6', weight: 2, dashArray: '5 5', fillOpacity: 0.2 }}
               />
             )}
             {polygonVertices.length >= 2 && (
               <Polyline
-                positions={polygonVertices.map(v => [v.lat, v.lng])}
+                positions={polygonVertices as L.LatLngExpression[]}
                 pathOptions={{ color: '#3b82f6', weight: 2 }}
               />
             )}
             {polygonVertices.map((vertex, index) => (
               <CircleMarker
                 key={index}
-                center={[vertex.lat, vertex.lng]}
+                center={vertex as L.LatLngExpression}
                 radius={5}
                 pathOptions={{ color: '#3b82f6', fillColor: '#3b82f6', fillOpacity: 1 }}
               >
@@ -479,17 +498,19 @@ export const MapView: React.FC = () => {
         )}
       </MapContainer>
 
-      {/* Map Controls */}
       <div className="absolute top-4 right-4 flex flex-col gap-2">
         <button className="p-2 bg-gray-600/90 hover:bg-dark-200 border border-gray-600 rounded text-white transition-colors">
           <MapPin size={20} />
         </button>
-        <button className="p-2 bg-gray-600/90 hover:bg-dark-200 border border-gray-600 rounded text-white transition-colors">
+        <button 
+          onClick={() => setIsTracking(!isTracking)}
+          title={isTracking ? "Disable auto-tracking" : "Enable auto-tracking"}
+          className={`p-2 border border-gray-600 rounded text-white transition-colors ${isTracking ? 'bg-blue-600/90 hover:bg-blue-700' : 'bg-gray-600/90 hover:bg-dark-200'}`}
+        >
           <Crosshair size={20} />
         </button>
       </div>
 
-      {/* Map Legend */}
       <div className="absolute bottom-4 left-4 bg-gray-600/90 border border-gray-600 rounded p-3 text-xs">
         <div className="text-white font-semibold mb-2">Map Legend</div>
         <div className="space-y-1.5">
@@ -518,7 +539,6 @@ export const MapView: React.FC = () => {
         </div>
       </div>
 
-      {/* Live Video Toggle */}
       <div className="absolute top-4 left-4 bg-gray-600/90 border border-gray-600 rounded px-4 py-2">
         <label className="flex items-center gap-2 cursor-pointer">
           <input type="checkbox" className="w-4 h-4" />
@@ -526,20 +546,27 @@ export const MapView: React.FC = () => {
         </label>
       </div>
 
-      {/* Context Menu */}
       {contextMenu && (
         <ContextMenu
           position={{ x: contextMenu.x, y: contextMenu.y }}
           latlng={contextMenu.latlng}
           onClose={() => setContextMenu(null)}
-          setIsDrawingPolygon={setIsDrawingPolygon}
-          setPolygonVertices={setPolygonVertices}
           onLoadKml={handleLoadKml}
           setKmlData={setKmlData}
+          onAddWaypoint={(latlng) => {
+            addWaypoint({
+              id: Date.now(),
+              position: { lat: latlng.lat, lng: latlng.lng, alt: 10 },
+              altitude: 10,
+              speed: 5,
+              label: `WP ${(currentMission?.waypoints?.length || 0) + 1}`
+            });
+          }}
+          onGoTo={(latlng) => {
+            goto(latlng.lat, latlng.lng, 10);
+          }}
         />
       )}
-
-      {/* Hidden file input for KML loading */}
       <input
         ref={fileInputRef}
         type="file"
@@ -548,8 +575,7 @@ export const MapView: React.FC = () => {
         style={{ display: 'none' }}
       />
 
-      {/* Polygon Drawing Controls */}
-      {isDrawingPolygon && (
+      {isDrawingMode && (
         <div className="absolute top-20 right-4 bg-gray-800/95 backdrop-blur-md border-2 border-blue-500 rounded-lg shadow-2xl p-4 z-500 min-w-[320px]">
           <div className="text-white mb-3">
             <div className="text-lg font-bold mb-1">Drawing Polygon</div>

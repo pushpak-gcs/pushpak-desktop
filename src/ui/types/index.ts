@@ -1,5 +1,3 @@
-// Core Types for Pushpak GCS
-
 export interface Position {
   lat: number;
   lng: number;
@@ -11,6 +9,7 @@ export interface Waypoint {
   position: Position;
   altitude: number;
   speed: number;
+  loiterTime?: number;
   label: string;
 }
 
@@ -83,7 +82,10 @@ export interface RSSI {
 export interface Mission {
   id: string;
   name: string;
+  type?: string;
+  polygon?: Position[];
   waypoints: Waypoint[];
+  endAction?: 'LOITER' | 'RTL' | 'LAND';
   homePosition?: Position;
   estimatedTime?: number; // minutes
   estimatedDistance?: number; // meters

@@ -17,13 +17,13 @@
     "dist:linux": "npm run transpile:electron && npm run build && electron-builder --linux --x64"
   },
   "dependencies": {
-    "@pushpak/mavlink": "file:../pushpak-mavlink",
     "@tailwindcss/vite": "^4.1.18",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.563.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-leaflet": "^5.0.0",
+    "socket.io-client": "^4.8.3",
     "tailwindcss": "^4.1.18",
     "zustand": "^5.0.11"
   },

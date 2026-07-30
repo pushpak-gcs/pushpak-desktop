@@ -5,7 +5,6 @@
 
 const { contextBridge, ipcRenderer } = require('electron');
 
-// Store listeners for proper cleanup
 const listeners = new Map<string, Map<Function, (event: any, ...args: any[]) => void>>();
 
 contextBridge.exposeInMainWorld('electron', {
@@ -16,7 +15,6 @@ contextBridge.exposeInMainWorld('electron', {
   on: (channel: string, callback: (...args: any[]) => void) => {
     const subscription = (_event: any, ...args: any[]) => callback(...args);
     
-    // Store the subscription for later removal
     if (!listeners.has(channel)) {
       listeners.set(channel, new Map());
     }

@@ -1,26 +1,36 @@
 import { create } from 'zustand';
 import type { DroneStatus, Mission, GeofenceData, PayloadTask } from '../types';
+import { socket } from '../hooks/mavlink';
 
 interface DroneStore {
-  // Drone state
+
   droneStatus: DroneStatus;
   connected: boolean;
   
-  // Mission state
+
   currentMission: Mission | null;
+  savedMissions: Mission[];
+  isDrawingMode: boolean;
   geofence: GeofenceData | null;
   payloadTasks: PayloadTask[];
   
-  // UI state
+
   selectedTab: 'Mission' | 'Payload' | 'Geofence' | 'Multi-Drone';
   mapCenter: { lat: number; lng: number };
   
-  // Actions
+
   updateDroneStatus: (status: Partial<DroneStatus>) => void;
   setConnected: (connected: boolean) => void;
   setCurrentMission: (mission: Mission | null) => void;
+  setSavedMissions: (missions: Mission[]) => void;
+  setIsDrawingMode: (isDrawing: boolean) => void;
+  updateMissionDetails: (updates: Partial<Mission>) => void;
+  addPolygonVertex: (position: any) => void;
+  clearPolygon: () => void;
   addWaypoint: (waypoint: any) => void;
   removeWaypoint: (id: number) => void;
+  updateWaypoint: (id: number, updates: Partial<any>) => void;
+  setEndAction: (action: 'LOITER' | 'RTL' | 'LAND') => void;
   setGeofence: (geofence: GeofenceData | null) => void;
   addPayloadTask: (task: PayloadTask) => void;
   setSelectedTab: (tab: 'Mission' | 'Payload' | 'Geofence' | 'Multi-Drone') => void;
@@ -28,7 +38,6 @@ interface DroneStore {
 }
 
 export const useDroneStore = create<DroneStore>((set) => ({
-  // Initial state
   droneStatus: {
     vehicle: 'Drone 1',
     mode: 'STABILIZE',
@@ -45,12 +54,13 @@ export const useDroneStore = create<DroneStore>((set) => ({
   },
   connected: false,
   currentMission: null,
+  savedMissions: [],
+  isDrawingMode: false,
   geofence: null,
   payloadTasks: [],
   selectedTab: 'Mission',
-  mapCenter: { lat: 19.0760, lng: 72.8777 }, // Default to Mumbai
+  mapCenter: { lat: 19.0760, lng: 72.8777 }, // Default Location at starting
   
-  // Actions
   updateDroneStatus: (status) =>
     set((state) => ({
       droneStatus: { ...state.droneStatus, ...status, timestamp: Date.now() },
@@ -60,9 +70,51 @@ export const useDroneStore = create<DroneStore>((set) => ({
   
   setCurrentMission: (mission) => set({ currentMission: mission }),
   
-  addWaypoint: (waypoint) =>
+  setSavedMissions: (missions) => set({ savedMissions: missions }),
+  
+  setIsDrawingMode: (isDrawing) => set({ isDrawingMode: isDrawing }),
+  
+  updateMissionDetails: (updates) => 
+    set((state) => ({
+      currentMission: state.currentMission 
+        ? { ...state.currentMission, ...updates }
+        : null
+    })),
+    
+  addPolygonVertex: (position) =>
     set((state) => {
       if (!state.currentMission) return state;
+      const currentPoly = state.currentMission.polygon || [];
+      return {
+        currentMission: {
+          ...state.currentMission,
+          polygon: [...currentPoly, position]
+        }
+      };
+    }),
+    
+  clearPolygon: () =>
+    set((state) => {
+      if (!state.currentMission) return state;
+      return {
+        currentMission: {
+          ...state.currentMission,
+          polygon: []
+        }
+      };
+    }),
+  
+  addWaypoint: (waypoint) =>
+    set((state) => {
+      if (!state.currentMission) {
+        return {
+          currentMission: {
+            id: Date.now().toString(),
+            name: 'New Mission',
+            waypoints: [waypoint]
+          }
+        };
+      }
       return {
         currentMission: {
           ...state.currentMission,
@@ -82,6 +134,30 @@ export const useDroneStore = create<DroneStore>((set) => ({
       };
     }),
   
+  updateWaypoint: (id, updates) =>
+    set((state) => {
+      if (!state.currentMission) return state;
+      return {
+        currentMission: {
+          ...state.currentMission,
+          waypoints: state.currentMission.waypoints.map((wp) => 
+            wp.id === id ? { ...wp, ...updates } : wp
+          ),
+        }
+      };
+    }),
+    
+  setEndAction: (action) =>
+    set((state) => {
+      if (!state.currentMission) return state;
+      return {
+        currentMission: {
+          ...state.currentMission,
+          endAction: action
+        }
+      }
+    }),
+  
   setGeofence: (geofence) => set({ geofence }),
   
   addPayloadTask: (task) =>
@@ -93,6 +169,6 @@ export const useDroneStore = create<DroneStore>((set) => ({
   
   sendCommand: (command) => {
     console.log('Sending command:', command);
-    // TODO: Implement MAVLink command sending
+    socket.emit('command_long', { command: command });
   },
 }));

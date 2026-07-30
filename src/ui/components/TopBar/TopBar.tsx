@@ -13,17 +13,15 @@ export const TopBar: React.FC = () => {
     return now.toLocaleTimeString();
   };
 
-  // GPS fix type mapping
   const getGpsFix = (fixType?: number): '3D_FIX' | 'NO_FIX' | '2D_FIX' => {
     if (!fixType || fixType < 2) return 'NO_FIX';
     if (fixType === 2) return '2D_FIX';
     return '3D_FIX';
   };
 
-  // Link quality based on connection and heartbeat age
   const getLinkQuality = (): 'GOOD' | 'POOR' | 'NONE' => {
     if (!connected) return 'NONE';
-    return 'GOOD'; // Can be enhanced with signal strength metrics
+    return 'GOOD';
   };
 
   const handleArmClick = async () => {
@@ -48,7 +46,6 @@ export const TopBar: React.FC = () => {
   const handleModeChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
     try {
       const modeName = e.target.value;
-      // Map mode names to CopterMode enum values
       const modeMap: Record<string, CopterMode> = {
         'STABILIZE': CopterMode.STABILIZE,
         'ALT_HOLD': CopterMode.ALT_HOLD,
@@ -81,10 +78,8 @@ export const TopBar: React.FC = () => {
         if (selectedPort === 'UDP') {
           await connect({ type: 'udp', port: 14550, host: '127.0.0.1' });
         } else if (selectedPort === 'TCP') {
-          alert('TCP connection not yet implemented');
-          return;
+          await connect({ type: 'tcp', port: 5760, host: '127.0.0.1' });
         } else {
-          // Serial port
           await connect({ type: 'serial', path: selectedPort, baudRate: selectedBaudRate });
         }
         console.log('Connected successfully');
@@ -106,14 +101,12 @@ export const TopBar: React.FC = () => {
       </div>
 
       <div className="flex gap-4 items-center justify-end flex-grow">
-        {/* Vehicle ID */}
         <div className="flex items-center gap-2">
           <div className="bg-zinc-800 text-white border-2 border-zinc-600 rounded-lg px-4 py-2 text-base font-semibold min-w-[110px] text-center">
             {systemId ? `System ${systemId}` : 'No Vehicle'}
           </div>
         </div>
 
-      {/* Mode Dropdown */}
       <div className="flex items-center gap-2">
         <select 
           value={mode} 
@@ -131,7 +124,7 @@ export const TopBar: React.FC = () => {
         </select>
       </div>
 
-      {/* Arm Button */}
+
       <button 
         onClick={handleArmClick}
         disabled={!connected}
@@ -144,7 +137,6 @@ export const TopBar: React.FC = () => {
         {armed ? 'DISARM' : 'ARM'}
       </button>
 
-      {/* Status Indicators */}
       <div className="flex items-center border-2 border-zinc-600 rounded-lg overflow-hidden bg-zinc-800/50">
         <div className={`flex items-center gap-2 px-4 py-2 ${
           getGpsFix(telemetry.gps?.fix) === '3D_FIX' 
@@ -204,12 +196,11 @@ export const TopBar: React.FC = () => {
         </div>
       </div>
 
-      {/* Settings */}
+
       <button className="p-2 hover:bg-zinc-800 rounded transition-colors">
         <Settings size={20} className="text-gray-400 hover:text-white" />
       </button>
 
-      {/* Connection Controls */}
       <div className="flex items-center gap-2 border-2 border-zinc-600 rounded-lg overflow-hidden bg-zinc-800/50">
         <select 
           value={selectedPort}
